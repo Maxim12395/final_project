@@ -1,186 +1,132 @@
+# Лабораторная работа №6. Задание 3
 import numpy as np
 from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from collisions import collision
 
-def circle_func(x_centre_point, # х-координата центральной точки окружности
-                y_centre_point, # у-координата центральной точки окружности
+radius = 0.5  # Радиус шариков
+radius_c = 1.5
+q = -10**(-7)
+mass = 10  # Масса шариков
+
+# Границы
+Lx = 20
+Ly = 20
+
+K = 1 # Коэффициент столкновений между шариками
+
+T = 10 # Общее время анимации
+n = 500 # Количество итераций / кадров
+tau = np.linspace(0,T,n) # Массив для одного шага анимации
+dT = T / n # Время одного шага итерации
+
+N = 40 # Количество чатсиц
+p = np.zeros((N,4)) # Массивы для текущих значений положений и скоростей частиц
+
+# Массивы для записи итоговых координат на каждой итерации для итоговой анимации
+x = np.zeros((N,n))
+y = np.zeros((N,n))
+
+# Массивы для записи х, y, vx, vy для каждой частицы
+p[0,0], p[0,1], p[0,2], p[0,3] = -15, 5, 6.5, 1.5
+p[1,0], p[1,1], p[1,2], p[1,3] = -15, 1, 5, 1
+p[2,0], p[2,1], p[2,2], p[2,3] = -15, -10, 1, 5
+
+x[0,0], y[0,0] = p[0,0], p[0,1]
+x[1,0], y[1,0] = p[1,0], p[1,1]
+x[2,0], y[2,0] = p[2,0], p[2,1]
+
+
+qc = 10
+xc = 1
+yc = 1
+mass_c = 1000
+const =  8.98755 * 10**9
+g = 0.00  # Ускорение свободного падения
+
+def circle_func(x_centre_point,
+                y_centre_point,
                 R):
-    """ Функция, возвращающая точки окружности относительно определенного центра
-    """
-    x = np.zeros(30) #Создание массива для координаты х
-    y = np.zeros(30) #Создание массива для координаты у
-    for i in range(0, 30, 1): # Цикл, определяющий множество точек окружности относительно центра
+    x = np.zeros(30)
+    y = np.zeros(30)
+    for i in range(0, 30, 1):
         alpha = np.linspace(0, 2*np.pi, 30)
         x[i] = x_centre_point + R*np.cos(alpha[i])
         y[i] = y_centre_point + R*np.sin(alpha[i])
 
     return x, y
 
-def collision(x1,y1,vx1,vy1,x2,y2,vx2,vy2,radius,mass1,mass2,K):
-
-    """Аргументы функции:
-    x1,y1,vx1,vy1 - координаты и компоненты скорости 1-ой частицы
-    x2,y2,vx2,vy2 - ... 2-ой частицы
-    radius,mass1,mass2 - радиус частиц и их массы (массы разные можно задавать,
-    радиус для простоты взят одинаковый)
-    K - коэффициент восстановления (K=1 для абсолютного упругого удара, K=0
-    для абсолютно неупругого удара, 0<K<1 для реального удара)
-    Функция возвращает компоненты скоростей частиц, рассчитанные по формулам для
-    реального удара, если стокновение произошло. Если удара нет, то возвращаются
-    те же значения скоростей, что и заданные в качестве аргументов.
-    """
-    r12=np.sqrt((x1-x2)**2+(y1-y2)**2) #расчет расстояния между центрами частиц
-    v1=np.sqrt(vx1**2+vy1**2) #расчет модулей скоростей частиц
-    v2=np.sqrt(vx2**2+vy2**2)
-
-    #проверка условия на столкновение: расстояние должно быть меньше 2-х радиусов
-    if r12<=2*radius:
-
-        '''вычисление углов движения частиц theta1(2), т.е. углов между
-        направлением скорости частицы и положительным направлением оси X.
-        Если частица  покоится, то угол считается равным нулю. Т.к. функция
-        arccos имеет область значений от 0 до Pi, то в случае отрицательных
-        y-компонент скорости для вычисления угла theta1(2) надо из 2*Pi
-        вычесть значение arccos(vx/v)
-        '''
-        if v1!=0:
-            theta1 = np.arccos(vx1 / v1)
-        else:
-            theta1 = 0
-        if v2!=0:
-            theta2 = np.arccos(vx2 / v2)
-        else:
-            theta2 = 0
-        if vy1<0:
-            theta1 = - theta1 + 2 * np.pi
-        if vy2<0:
-            theta2 = - theta2 + 2 * np.pi
-
-        #вычисление угла соприкосновения.
-        if (y1-y2)<0:
-            phi = - np.arccos((x1-x2) / r12) + 2 * np.pi
-        else:
-            phi = np.arccos((x1-x2) / r12)
-
-        # Пересчет  x-компоненты скорости первой частицы
-        VX1 = v1 * np.cos(theta1 - phi) * (mass1 - K * mass2) \
-        * np.cos(phi) / (mass1 + mass2)\
-        + ((1 + K) * mass2 * v2 * np.cos(theta2 - phi))\
-        * np.cos(phi) / (mass1 + mass2)\
-        + K * v1 * np.sin(theta1 - phi) * np.cos(phi + np.pi / 2)
-
-        # Пересчет y-компоненты скорости первой частицы
-        VY1 = v1 * np.cos(theta1 - phi) * (mass1 - K * mass2) \
-        * np.sin(phi) / (mass1 + mass2) \
-        + ((1 + K) * mass2 * v2 * np.cos(theta2 - phi)) \
-        * np.sin(phi) / (mass1 + mass2) \
-        + K * v1 * np.sin(theta1 - phi) * np.sin(phi + np.pi / 2)
-
-        # Пересчет x-компоненты скорости второй частицы
-        VX2 = v2 * np.cos(theta2 - phi) * (mass2 - K * mass1) \
-        * np.cos(phi) / (mass1 + mass2)\
-        + ((1 + K) * mass1 * v1 * np.cos(theta1 - phi)) \
-        * np.cos(phi) / (mass1 + mass2)\
-        + K * v2 * np.sin(theta2 - phi) * np.cos(phi + np.pi / 2)
-
-        # Пересчет y-компоненты скорости второй частицы
-        VY2 = v2 * np.cos(theta2 - phi) * (mass2 - K * mass1) \
-        * np.sin(phi) / (mass1 + mass2) \
-        + ((1 + K) * mass1 * v1 * np.cos(theta1 - phi)) \
-        * np.sin(phi) / (mass1 + mass2)\
-        + K * v2 * np.sin(theta2 - phi) * np.sin(phi + np.pi / 2)
-
-    else:
-        #если условие столкновнеия не выполнено, то скорости частиц не пересчитываются
-        VX1, VY1, VX2, VY2 = vx1, vy1, vx2, vy2
-
-    return VX1, VY1, VX2, VY2
-
-#система уравнений для равномерного движения 2-х частиц в двумерном пространстве
 def move_func(s, t):
-    x1, v_x1, y1, v_y1, x2, v_x2, y2, v_y2 = s
+    x, v_x, y, v_y = s
 
-    dx1dt = v_x1
-    dv_x1dt = (k*q1*q2/m1*(x1-x2)/((x1-x2)**2+(y1-y2)**2)**1.5
-               +k*q1*q2/m1*(x2-x1)/((x1-x2)**2+(y1-y2)**2)**1.5)
+    dxdt = v_x
+    dv_xdt = const*q*qc/mass*(x-xc)/((x-xc)**2+(y-yc)**2)**1.5
 
-    dy1dt = v_y1
-    dv_y1dt = (k*q1*q2/m1*(x1-x2)/((x1-x2)**2+(y1-y2)**2)**1.5
-               +k*q1*q2/m1*(x2-x1)/((x1-x2)**2+(y1-y2)**2)**1.5)
+    dydt = v_y
+    dv_ydt = const*q*qc/mass*(yc-yc)/((x-xc)**2+(y-yc)**2)**1.5
 
-    dx2dt = v_x2
-    dv_x2dt = (k*q1*q2/m2*(x1-x2)/((x1-x2)**2+(y1-y2)**2)**1.5
-               +k*q1*q2/m2*(x2-x1)/((x1-x2)**2+(y1-y2)**2)**1.5)
+    return dxdt, dv_xdt, dydt, dv_ydt
 
-    dy2dt = v_y2
-    dv_y2dt = (k*q1*q2/m2*(x1-x2)/((x1-x2)**2+(y1-y2)**2)**1.5
-               +k*q1*q2/m2*(x2-x1)/((x1-x2)**2+(y1-y2)**2)**1.5)
 
-    return dx1dt, dv_x1dt, dy1dt, dv_y1dt, dx2dt, dv_x2dt, dy2dt, dv_y2dt
+for k in range(n-1):  # Цикл перебора шагов временеи анимации
+    t = [tau[k],tau[k+1]]
 
-T=10
-N=1000
-tau=np.linspace(0,T,N)
+    for m in range(N):  # Цикл перебора частиц
+        s0 = p[m,0], p[m,2], p[m,1], p[m,3]
+        sol = odeint(move_func, s0, t)
 
-q1 = 1
-q2 = 1
+        # Перезаписываем положения частиц
+        p[m,0] = sol[1,0]
+        p[m,2] = sol[1,1]
+        p[m,1] = sol[1,2]
+        p[m,3] = sol[1,3]
 
-m1 = 10
-m2 = 10
+        # Заноим новые положения в итоговый массив для анимации
+        x[m,k+1], y[m,k+1] = p[m,0], p[m,1]
 
-x10,y10=0,0
-x20,y20=6,6
-v_x10,v_y10=1,1
-v_x20,v_y20=-1,-1
-mass1=1
-mass2=1
-radius=0.5
-K=1
-x1,y1=[],[]
-x2,y2=[],[]
-x1.append(x10)
-x2.append(x20)
-y1.append(y10)
-y2.append(y20)
+        # Проверка условий столкновения с первой перегородкой
+        res = collision(p[m,0],p[m,1],p[m,2],p[m,3],xc,yc,0,0,radius,radius_c,mass,mass_c,K)
+        p[m,2], p[m,3] = res[0], res[1] # Пересчет скоростей
 
-for k in range(N-1):
-    t=[tau[k],tau[k+1]]
-    s0 = x10,v_x10,y10,v_y10,x20,v_x20,y20,v_y20
-    sol = odeint(move_func, s0, t)
-    x10=sol[1,0]
-    x1.append(x10)
-    v_x10=sol[1,1]
-    y10=sol[1,2]
-    y1.append(y10)
-    v_y10=sol[1,3]
-    x20=sol[1,4]
-    x2.append(x20)
-    v_x20=sol[1,5]
-    y20=sol[1,6]
-    y2.append(y20)
-    v_y20=sol[1,7]
-    r1=np.sqrt((x1[k]-x2[k])**2+(y1[k]-y2[k])**2)
-    r0=np.sqrt((x1[k-1]-x2[k-1])**2+(y1[k-1]-y2[k-1])**2)
-    if r1<=radius*2 and r0>radius*2:
-        res=collision(x10,y10,v_x10,v_y10,x20,y20,v_x20,v_y20,radius,mass1,mass2,K)
-        v_x10,v_y10=res[0],res[1]
-        v_x20, v_y20=res[2],res[3]
 
-fig, ax = plt.subplots()
+    # Циклы перебора частиц для столкновений друг с другом
+    for i in range(N): # Базовая частица
+        x1, y1, vx1, vy1 = p[i,0], p[i,1], p[i,2], p[i,3] # Запись текущих координат базовой частицы
+        x10, y10 = x[i,k], y[i,k] # Запись координат предыдущего шага базовой частицы
+
+        for j in range(i+1,N): # Запись текущих координат остальных частиц
+            x2, y2, vx2, vy2 = p[j,0], p[j,1], p[j,2], p[j,3] # Запись текущих
+            x20, y20 = x[j,k], y[j,k] # Запись координат предыдущего шага
+
+            # Проверка условий столкновения
+            r1 = np.sqrt((x1-x2)**2+(y1-y2)**2)
+            r0 = np.sqrt((x10-x20)**2+(y10-y20)**2)
+            if  r1 <= radius*2 and r0 > 2*radius:
+                res = collision(x1,y1,vx1,vy1,x2,y2,vx2,vy2,radius,radius,mass,mass,K)
+
+                # Перезаписывание условий, в случае столкновения
+                p[i,2], p[i,3] = res[0], res[1]
+                p[j,2], p[j,3] = res[2], res[3]
+
+# Графический вывод
+fig = plt.figure()
+
 ball1, = plt.plot([], [], 'o', color='r', ms=1)
 ball2, = plt.plot([], [], 'o', color='r', ms=1)
+ball3, = plt.plot([], [], 'o', color='r', ms=1)
 
-balls = []
+plt.plot([xc], [yc], 'o', ms=20)
 
 def animate(i):
-    ball1.set_data(circle_func(x1[i], y1[i], radius))
-    ball2.set_data(circle_func(x2[i], y2[i], radius))
+    ball1.set_data(circle_func(x[0, i], y[0, i], radius))
+    ball2.set_data(circle_func(x[1, i], y[1, i], radius))
+    ball3.set_data(circle_func(x[2, i], y[2, i], radius))
 
+ani = FuncAnimation(fig, animate, frames=n, interval=1)
 
-ani = FuncAnimation(fig, animate, frames=N, interval=1)
 plt.axis('equal')
-plt.ylim(-10, 15)
-plt.xlim(-10, 20)
+plt.xlim(-Lx, Lx)
+plt.ylim(-Ly, Ly)
 
-plt.show()
+ani.save("123.gif")
